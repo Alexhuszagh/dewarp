@@ -131,7 +131,6 @@ pub enum CustomAction {
     NewAgentTab,
     GoToLine,
     ToggleGlobalSearch,
-    ToggleConversationListView,
 }
 
 lazy_static! {
@@ -426,13 +425,6 @@ pub fn custom_tag_to_keystroke(custom: CustomTag) -> Option<Keystroke> {
                 Keystroke::parse("ctrl-3").ok()
             } else {
                 Keystroke::parse("alt-3").ok()
-            }
-        }
-        CustomAction::ToggleConversationListView => {
-            if OperatingSystem::get().is_mac() {
-                Keystroke::parse("ctrl-2").ok()
-            } else {
-                Keystroke::parse("alt-2").ok()
             }
         }
         CustomAction::NewTerminalTab

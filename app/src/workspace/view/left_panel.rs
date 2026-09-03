@@ -64,7 +64,7 @@ use crate::workspace::view::global_search::view::{
     Event as GlobalSearchViewEvent, GlobalSearchEntryFocus, GlobalSearchView,
 };
 use crate::workspace::view::{
-    LEFT_PANEL_AGENT_CONVERSATIONS_BINDING_NAME, LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME,
+    LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME,
     LEFT_PANEL_PROJECT_EXPLORER_BINDING_NAME, LEFT_PANEL_WARP_DRIVE_BINDING_NAME,
     OPEN_GLOBAL_SEARCH_BINDING_NAME, TOGGLE_CONVERSATION_LIST_VIEW_BINDING_NAME,
     TOGGLE_PROJECT_EXPLORER_BINDING_NAME, TOGGLE_WARP_DRIVE_BINDING_NAME,
@@ -595,7 +595,6 @@ impl LeftPanelView {
             }
             ToolPanelView::ConversationListView => {
                 let tooltip_keybinding_names = vec![
-                    LEFT_PANEL_AGENT_CONVERSATIONS_BINDING_NAME,
                     TOGGLE_CONVERSATION_LIST_VIEW_BINDING_NAME,
                 ];
 

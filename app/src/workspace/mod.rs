@@ -64,11 +64,11 @@ pub use registry::WorkspaceRegistry;
 pub use toast_stack::{ToastStack, ToastStackEvent};
 
 use crate::workspace::view::{
-    LEFT_PANEL_AGENT_CONVERSATIONS_BINDING_NAME, LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME,
+    LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME,
     LEFT_PANEL_PROJECT_EXPLORER_BINDING_NAME, LEFT_PANEL_WARP_DRIVE_BINDING_NAME,
     NEW_AGENT_TAB_BINDING_NAME, NEW_AMBIENT_AGENT_TAB_BINDING_NAME, NEW_FILE_BINDING_NAME,
     NEW_TAB_BINDING_NAME, NEW_TERMINAL_TAB_BINDING_NAME, OPEN_GLOBAL_SEARCH_BINDING_NAME,
-    TOGGLE_CONVERSATION_LIST_VIEW_BINDING_NAME, TOGGLE_NOTIFICATION_MAILBOX_BINDING_NAME,
+    TOGGLE_NOTIFICATION_MAILBOX_BINDING_NAME,
     TOGGLE_PROJECT_EXPLORER_BINDING_NAME, TOGGLE_RIGHT_PANEL_BINDING_NAME,
     TOGGLE_TAB_CONFIGS_MENU_BINDING_NAME, TOGGLE_VERTICAL_TABS_PANEL_BINDING_NAME,
     TOGGLE_WARP_DRIVE_BINDING_NAME,
@@ -186,12 +186,6 @@ pub fn init(app: &mut AppContext) {
                 )
                 .with_context_predicate(id!("Workspace")),
                 EditableBinding::new(
-                    "workspace:debug_reset_aws_bedrock_login_banner_dismissed",
-                    "[Debug] Un-dismiss AWS login banner",
-                    WorkspaceAction::DebugResetAwsBedrockLoginBannerDismissed,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
                     "workspace:open_oz_launch_modal",
                     "[Debug] Open Oz Launch Modal",
                     WorkspaceAction::OpenOzLaunchModal,
@@ -225,18 +219,6 @@ pub fn init(app: &mut AppContext) {
                     "workspace:reset_orchestration_launch_modal_state",
                     "[Debug] Reset Orchestration Launch Modal State",
                     WorkspaceAction::ResetOrchestrationLaunchModalState,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:open_agent_cli_launch_modal",
-                    "[Debug] Open Warp Agent CLI Launch Modal",
-                    WorkspaceAction::OpenAgentCliLaunchModal,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:reset_agent_cli_launch_modal_state",
-                    "[Debug] Reset Warp Agent CLI Launch Modal State",
-                    WorkspaceAction::ResetAgentCliLaunchModalState,
                 )
                 .with_context_predicate(id!("Workspace")),
                 EditableBinding::new(
@@ -782,15 +764,6 @@ pub fn init(app: &mut AppContext) {
         .with_context_predicate(id!("Workspace") & id!(flags::SHOW_PROJECT_EXPLORER))
         .with_custom_action(CustomAction::ToggleProjectExplorer),
         EditableBinding::new(
-            LEFT_PANEL_AGENT_CONVERSATIONS_BINDING_NAME,
-            BindingDescription::new("Left Panel: Agent conversations"),
-            WorkspaceAction::ToggleConversationListView,
-        )
-        .with_group(bindings::BindingGroup::Navigation.as_str())
-        .with_context_predicate(id!("Workspace") & id!(flags::SHOW_CONVERSATION_HISTORY))
-        .with_enabled(|| FeatureFlag::AgentViewConversationListView.is_enabled())
-        .with_custom_action(CustomAction::ToggleConversationListView),
-        EditableBinding::new(
             LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME,
             BindingDescription::new("Left Panel: Global search"),
             WorkspaceAction::ToggleGlobalSearch,
@@ -841,19 +814,6 @@ pub fn init(app: &mut AppContext) {
             WorkspaceAction::ToggleWarpDrive,
         )
         .with_context_predicate(id!("Workspace") & id!(flags::ENABLE_WARP_DRIVE)),
-        EditableBinding::new(
-            TOGGLE_CONVERSATION_LIST_VIEW_BINDING_NAME,
-            BindingDescription::new("Toggle Agent conversation list view").with_custom_description(
-                bindings::MAC_MENUS_CONTEXT,
-                "Agent conversation list view",
-            ),
-            WorkspaceAction::ToggleConversationListView,
-        )
-        .with_enabled(|| FeatureFlag::AgentViewConversationListView.is_enabled())
-        .with_context_predicate(id!("Workspace") & id!(flags::SHOW_CONVERSATION_HISTORY))
-        .with_mac_key_binding("cmd-shift-A")
-        .with_linux_or_windows_key_binding("ctrl-shift-A")
-        .with_group(bindings::BindingGroup::WarpAi.as_str()),
         EditableBinding::new(
             "workspace:close_panel",
             BindingDescription::new("Close focused panel")

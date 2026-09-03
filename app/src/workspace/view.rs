@@ -677,8 +677,6 @@ pub(crate) const LEFT_PANEL_PROJECT_EXPLORER_BINDING_NAME: &str =
     "workspace:left_panel_project_explorer";
 pub(crate) const LEFT_PANEL_GLOBAL_SEARCH_BINDING_NAME: &str = "workspace:left_panel_global_search";
 pub(crate) const LEFT_PANEL_WARP_DRIVE_BINDING_NAME: &str = "workspace:left_panel_warp_drive";
-pub(crate) const LEFT_PANEL_AGENT_CONVERSATIONS_BINDING_NAME: &str =
-    "workspace:left_panel_agent_conversations";
 
 const KEYBINDINGS_TO_CACHE: [&str; 4] = [
     ASK_AI_ASSISTANT_KEYBINDING_NAME,
@@ -24881,15 +24879,6 @@ impl TypedActionView for Workspace {
                     ctx.notify();
                 }
             }
-            OpenAgentManagementView => {
-                if AISettings::as_ref(ctx).is_any_ai_enabled(ctx)
-                    && FeatureFlag::AgentManagementView.is_enabled()
-                {
-                    self.set_is_agent_management_view_open(true, ctx);
-                    ctx.focus(&self.agent_management_view);
-                    ctx.notify();
-                }
-            }
             ViewAgentRunsForEnvironment { environment_id } => {
                 if AISettings::as_ref(ctx).is_any_ai_enabled(ctx)
                     && FeatureFlag::AgentManagementView.is_enabled()
@@ -25730,21 +25719,6 @@ impl TypedActionView for Workspace {
                 log::info!("Build plan migration modal dismissed state has been reset");
             }
             #[cfg(debug_assertions)]
-            DebugResetAwsBedrockLoginBannerDismissed => {
-                // Reset the AWS Bedrock login banner dismissed state for debugging
-                AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
-                    if let Err(e) = ai_settings
-                        .aws_bedrock_login_banner_dismissed
-                        .set_value(false, ctx)
-                    {
-                        log::warn!(
-                            "Failed to reset AWS Bedrock login banner dismissed setting: {e}"
-                        );
-                    }
-                });
-                log::info!("AWS Bedrock login banner dismissed state has been reset");
-            }
-            #[cfg(debug_assertions)]
             OpenOzLaunchModal => {
                 // Force open the Oz launch modal for debugging
                 OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
@@ -25866,34 +25840,6 @@ impl TypedActionView for Workspace {
                 log::info!(
                     "Orchestration launch modal state: old={old_value}, new={new_value}, feature_flag_enabled={}",
                     FeatureFlag::OrchestrationLaunchModal.is_enabled()
-                );
-            }
-            #[cfg(debug_assertions)]
-            OpenAgentCliLaunchModal => {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.force_open_agent_cli_launch_modal(ctx);
-                });
-                ctx.notify();
-            }
-            #[cfg(debug_assertions)]
-            ResetAgentCliLaunchModalState => {
-                let old_value =
-                    *AISettings::as_ref(ctx).did_check_to_trigger_agent_cli_launch_modal;
-                AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
-                    if let Err(e) = ai_settings
-                        .did_check_to_trigger_agent_cli_launch_modal
-                        .set_value(false, ctx)
-                    {
-                        log::warn!(
-                            "Failed to reset Warp Agent CLI launch modal dismissed setting: {e}"
-                        );
-                    }
-                });
-                let new_value =
-                    *AISettings::as_ref(ctx).did_check_to_trigger_agent_cli_launch_modal;
-                log::info!(
-                    "Warp Agent CLI launch modal state: old={old_value}, new={new_value}, feature_flag_enabled={}",
-                    FeatureFlag::AgentCliLaunchModal.is_enabled()
                 );
             }
             #[cfg(debug_assertions)]
@@ -26126,17 +26072,6 @@ impl TypedActionView for Workspace {
                         &LeftPanelAction::GlobalSearch {
                             entry_focus: GlobalSearchEntryFocus::QueryEditor,
                         },
-                        ctx,
-                    );
-                }
-            }
-            ToggleConversationListView => {
-                if FeatureFlag::AgentViewConversationListView.is_enabled() {
-                    let is_showing = self.left_panel_view.as_ref(ctx).active_view()
-                        == ToolPanelView::ConversationListView;
-                    self.toggle_left_panel_view(
-                        &LeftPanelAction::ConversationListView,
-                        is_showing,
                         ctx,
                     );
                 }
