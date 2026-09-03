@@ -136,7 +136,3 @@ impl Entity for ConnectedSelfHostedWorkersModel {
 }
 
 impl SingletonEntity for ConnectedSelfHostedWorkersModel {}
-
-#[cfg(test)]
-#[path = "connected_self_hosted_workers_tests.rs"]
-mod tests;

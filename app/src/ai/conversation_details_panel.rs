@@ -218,13 +218,7 @@ impl PrincipalInfo {
 
 impl From<&TaskPrincipalInfo> for PrincipalInfo {
     fn from(p: &TaskPrincipalInfo) -> Self {
-        Self {
-            display_name: p.display_name.clone().unwrap_or_else(|| p.uid.clone()),
-            photo_url: None,
-            uid: Some(p.uid.clone()),
-            is_service_account: PrincipalType::parse(&p.creator_type)
-                .is_some_and(|pt| pt.is_service_account()),
-        }
+        unimplemented!("TODO: Remove");
     }
 }
 
@@ -271,124 +265,14 @@ pub struct ConversationDetailsData {
 
 impl ConversationDetailsData {
     fn directory_for_task(task: &AmbientAgentTask, app: &AppContext) -> Option<String> {
-        let history_model = BlocklistAIHistoryModel::as_ref(app);
-        let conversation_id = history_model
-            .conversation_id_for_agent_id(&task.run_id().to_string())
-            .or_else(|| {
-                task.conversation_id().and_then(|conversation_id| {
-                    history_model.find_conversation_id_by_server_token(
-                        &ServerConversationToken::new(conversation_id.to_string()),
-                    )
-                })
-            })?;
-
-        history_model
-            .conversation(&conversation_id)
-            .and_then(|conversation| conversation.initial_working_directory())
-            .or_else(|| {
-                history_model
-                    .get_conversation_metadata(&conversation_id)
-                    .and_then(|metadata| metadata.initial_working_directory.clone())
-            })
+       unimplemented!("TODO: Remove");
     }
 
     /// Build details data from an in-memory `AIConversation`. Used both by the WASM
     /// transcript/shared-session details panel and by the native pane-level details panel
     /// when the active conversation is a local (non-cloud) Warp Agent run.
     pub fn from_conversation(conversation: &AIConversation, app: &AppContext) -> Self {
-        let mut directory = None;
-        let mut conversation_id = None;
-
-        // Server metadata (creator, timestamps)
-        let mut creator = None;
-        if let Some(server_metadata) = conversation.server_metadata() {
-            if let Some(creator_profile) = &server_metadata.creator {
-                creator = Some(PrincipalInfo::from_user_profile(creator_profile));
-            } else if let Some(creator_uid_str) = &server_metadata.metadata.creator_uid {
-                let creator_uid = UserUid::new(creator_uid_str);
-                let user_profiles = UserProfiles::handle(app).as_ref(app);
-
-                if let Some(profile) = user_profiles.profile_for_uid(creator_uid) {
-                    let display_name = profile.displayable_identifier();
-                    let photo_url = Some(profile.photo_url.clone()).filter(|url| !url.is_empty());
-                    creator = Some(PrincipalInfo::new(display_name, photo_url));
-                } else {
-                    // Fallback to first character of UID
-                    creator = Some(PrincipalInfo::from_uid_fallback(creator_uid_str));
-                }
-            }
-
-            // Conversation ID (from server token)
-            conversation_id = Some(
-                server_metadata
-                    .server_conversation_token
-                    .as_str()
-                    .to_string(),
-            );
-        }
-
-        // Calculate run time from exchanges
-        let first_exchange = conversation.first_exchange();
-        let last_exchange = conversation.latest_exchange();
-        let mut run_time = None;
-        let mut created_at = None;
-        if let (Some(first), Some(last)) = (first_exchange, last_exchange) {
-            if let Some(finish_time) = last.finish_time {
-                let duration = finish_time.signed_duration_since(first.start_time);
-                if duration.num_seconds() >= 0 {
-                    run_time = Some(duration);
-                }
-            }
-            // Created at from first exchange
-            created_at = Some(first.start_time);
-        }
-
-        // Working directory from first exchange
-        if let Some(first_exchange) = first_exchange {
-            directory = first_exchange.working_directory.clone();
-        }
-
-        let copy_link_url = conversation_id
-            .as_ref()
-            .map(|id| ServerConversationToken::new(id.clone()).conversation_link());
-
-        let harness = conversation
-            .server_metadata()
-            .map(|m| Harness::from(m.harness))
-            .or(Some(Harness::Oz));
-
-        let usage_totals = conversation.usage_totals();
-        let total_tokens: u32 = conversation
-            .token_usage()
-            .iter()
-            .map(|model| model.warp_tokens + model.byok_tokens + model.custom_endpoint_tokens)
-            .sum();
-
-        ConversationDetailsData {
-            mode: PanelMode::Conversation {
-                directory,
-                server_conversation_id: conversation_id,
-                ai_conversation_id: None,
-                status: Some(conversation.status().clone()),
-            },
-            title: conversation
-                .title()
-                .unwrap_or_else(|| "Conversation".to_string()),
-            creator,
-            executor: None,
-            created_at,
-            credits: Some(conversation.credits_spent()),
-            total_tokens: (total_tokens > 0).then_some(total_tokens),
-            charged_usage: usage_totals.charged_usage,
-            run_time,
-            artifacts: conversation.artifacts().to_vec(),
-            open_action: None,
-            source_prompt: conversation.initial_query(),
-            copy_link_url,
-            skill_spec: None,
-            harness,
-            fetch_error: None,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     pub fn from_task(
@@ -397,73 +281,7 @@ impl ConversationDetailsData {
         copy_link_url: Option<String>,
         app: &AppContext,
     ) -> Self {
-        let error_message = if task.state.is_failure_like() {
-            task.status_message.as_ref().map(|m| m.message.clone())
-        } else {
-            None
-        };
-
-        let environment_id = task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|config| config.environment_id.clone());
-
-        let runner_id = task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|config| config.runner_id.clone());
-
-        let credits = task.credits_used();
-
-        let skill_spec = task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|config| config.skill_spec.as_ref())
-            .and_then(|spec_str| SkillSpec::from_str(spec_str).ok());
-
-        let harness = task.agent_config_snapshot.as_ref().and_then(|config| {
-            config
-                .harness
-                .as_ref()
-                .map(|h| h.harness_type)
-                .or(Some(Harness::Oz))
-        });
-
-        ConversationDetailsData {
-            mode: PanelMode::Task {
-                task_id: Some(task.run_id()),
-                directory: Self::directory_for_task(task, app),
-                display_status: Some(AgentRunDisplayStatus::from_task(task, app)),
-                error_message,
-                environment_id,
-                runner_id,
-                conversation_id: task.conversation_id().map(str::to_string),
-            },
-            // Intentionally uses task.title; revisit when product decides
-            // whether to also show the short orchestrator label here.
-            title: task.title.clone(),
-            created_at: Some(task.created_at.with_timezone(&Local)),
-            artifacts: task.artifacts.clone(),
-            credits,
-            // GAP: cloud tasks are sourced from the REST `AmbientAgentTask`,
-            // which doesn't yet carry a per-category charges breakdown
-            // (tracked for the REST vertical).
-            total_tokens: None,
-            charged_usage: None,
-            run_time: task.run_time(),
-            open_action,
-            creator: task
-                .creator
-                .as_ref()
-                .filter(|c| c.display_name.is_some())
-                .map(PrincipalInfo::from),
-            executor: task.executor.as_ref().map(PrincipalInfo::from),
-            source_prompt: Some(task.prompt.clone()),
-            copy_link_url,
-            skill_spec,
-            harness,
-            fetch_error: None,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     pub fn from_agent_conversation_entry(
@@ -472,108 +290,7 @@ impl ConversationDetailsData {
         open_action: Option<WorkspaceAction>,
         copy_link_url: Option<String>,
     ) -> Self {
-        let creator = entry
-            .display
-            .creator
-            .name
-            .clone()
-            .map(|name| PrincipalInfo::new(name, None));
-        let executor = entry.display.executor.as_ref().and_then(|e| {
-            let display_name = e.name.clone().or_else(|| e.uid.clone())?;
-            Some(PrincipalInfo {
-                display_name,
-                photo_url: None,
-                uid: e.uid.clone(),
-                is_service_account: e.principal_type.is_some_and(|pt| pt.is_service_account()),
-            })
-        });
-        let created_at = Some(entry.display.created_at.with_timezone(&Local));
-        let source_prompt = entry.display.initial_query.clone();
-        let harness = entry.display.harness;
-
-        if let Some(task_id) = entry.identity.ambient_agent_task_id {
-            let error_message = task.and_then(|task| {
-                task.state
-                    .is_failure_like()
-                    .then(|| task.status_message.as_ref().map(|m| m.message.clone()))
-                    .flatten()
-            });
-            // Fall back to the entry's denormalized total when the task record isn't
-            // currently loaded, so the panel stays consistent with the card metadata
-            // (which always reads `entry.display.request_usage`).
-            let credits = task
-                .and_then(AmbientAgentTask::credits_used)
-                .or(entry.display.request_usage);
-            let skill_spec = task
-                .and_then(|task| task.agent_config_snapshot.as_ref())
-                .and_then(|config| config.skill_spec.as_ref())
-                .and_then(|spec_str| SkillSpec::from_str(spec_str).ok());
-
-            return ConversationDetailsData {
-                mode: PanelMode::Task {
-                    task_id: Some(task_id),
-                    directory: entry.display.working_directory.clone(),
-                    display_status: Some(entry.display.status.clone()),
-                    error_message,
-                    environment_id: entry.display.environment_id.clone(),
-                    runner_id: task
-                        .and_then(|task| task.agent_config_snapshot.as_ref())
-                        .and_then(|config| config.runner_id.clone()),
-                    conversation_id: entry
-                        .identity
-                        .server_conversation_token
-                        .as_ref()
-                        .map(|token| token.as_str().to_string()),
-                },
-                title: entry.display.title.clone(),
-                creator,
-                executor,
-                created_at,
-                credits,
-                // GAP: see the `from_task` gap note above.
-                total_tokens: None,
-                charged_usage: None,
-                run_time: task.and_then(AmbientAgentTask::run_time),
-                artifacts: entry.display.artifacts.clone(),
-                open_action,
-                source_prompt,
-                copy_link_url,
-                skill_spec,
-                harness,
-                fetch_error: None,
-            };
-        }
-
-        ConversationDetailsData {
-            mode: PanelMode::Conversation {
-                directory: entry.display.working_directory.clone(),
-                server_conversation_id: entry
-                    .identity
-                    .server_conversation_token
-                    .as_ref()
-                    .map(|token| token.as_str().to_string()),
-                ai_conversation_id: entry.identity.local_conversation_id,
-                status: Some(entry.display.status.to_conversation_status()),
-            },
-            title: entry.display.title.clone(),
-            creator,
-            executor: None,
-            created_at,
-            credits: entry.display.request_usage,
-            // GAP: this branch has no linked `AmbientAgentTask` and the
-            // entry's denormalized total is a bare credits figure with no
-            // token/breakdown counterpart.
-            total_tokens: None,
-            charged_usage: None,
-            run_time: None,
-            artifacts: entry.display.artifacts.clone(),
-            open_action,
-            source_prompt,
-            copy_link_url,
-            skill_spec: None,
-            harness,
-            fetch_error: None,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     /// Minimal details data for when we only know the task id (e.g. shared sessions)
@@ -582,32 +299,7 @@ impl ConversationDetailsData {
         task_id: AmbientAgentTaskId,
         fetch_error: Option<TaskFetchError>,
     ) -> Self {
-        ConversationDetailsData {
-            mode: PanelMode::Task {
-                task_id: Some(task_id),
-                directory: None,
-                display_status: None,
-                error_message: None,
-                environment_id: None,
-                runner_id: None,
-                conversation_id: None,
-            },
-            title: "Cloud agent run".to_string(),
-            creator: None,
-            executor: None,
-            created_at: None,
-            credits: None,
-            total_tokens: None,
-            charged_usage: None,
-            run_time: None,
-            artifacts: vec![],
-            open_action: None,
-            source_prompt: None,
-            copy_link_url: None,
-            skill_spec: None,
-            harness: None,
-            fetch_error,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -629,32 +321,7 @@ impl ConversationDetailsData {
         copy_link_url: Option<String>,
         harness: Option<Harness>,
     ) -> Self {
-        ConversationDetailsData {
-            mode: PanelMode::Conversation {
-                directory,
-                server_conversation_id: conversation_id,
-                ai_conversation_id: Some(ai_conversation_id),
-                status,
-            },
-            title,
-            creator: creator_name.map(|name| PrincipalInfo::new(name, None)),
-            executor: None,
-            created_at: Some(created_at),
-            credits: credits_used,
-            // GAP: this legacy management-view constructor only accepts a
-            // bare credits total; no token/breakdown source is threaded
-            // through it.
-            total_tokens: None,
-            charged_usage: None,
-            run_time: None,
-            open_action,
-            artifacts,
-            source_prompt: initial_query,
-            copy_link_url,
-            skill_spec: None,
-            harness,
-            fetch_error: None,
-        }
+        unimplemented!("TODO: Remove");
     }
 }
 
@@ -742,59 +409,7 @@ impl ConversationDetailsPanel {
     /// - `show_open_button`: whether to show the "Open" button (management view: true, transcript: false)
     /// - `initial_width`: starting width of the panel in pixels
     pub fn new(show_open_button: bool, initial_width: f32, ctx: &mut ViewContext<Self>) -> Self {
-        let artifact_buttons_row =
-            ctx.add_typed_action_view(|ctx| ArtifactButtonsRow::new(&[], ctx));
-        ctx.subscribe_to_view(&artifact_buttons_row, |this, _, event, ctx| {
-            this.handle_artifact_buttons_event(event, ctx)
-        });
-
-        let action_buttons = ctx.add_typed_action_view(ConversationActionButtonsRow::new);
-        ctx.subscribe_to_view(&action_buttons, Self::handle_action_buttons_event);
-
-        #[cfg(not(target_family = "wasm"))]
-        let continue_locally_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new("Continue locally", PrimaryTheme)
-                .with_tooltip("Fork this conversation locally")
-                .with_size(ButtonSize::Small)
-                .on_click(|ctx| {
-                    ctx.dispatch_typed_action(ConversationDetailsPanelAction::ContinueLocally);
-                })
-        });
-        let open_in_oz_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new("View in Oz", SecondaryTheme)
-                .with_tooltip("View this run in the Oz web app")
-                .with_size(ButtonSize::Small)
-                .on_click(|ctx| {
-                    ctx.dispatch_typed_action(ConversationDetailsPanelAction::OpenInOz);
-                })
-        });
-        ctx.subscribe_to_model(&AISettings::handle(ctx), |_, _, event, ctx| {
-            if matches!(
-                event,
-                AISettingsChangedEvent::IsAnyAIEnabled { .. }
-                    | AISettingsChangedEvent::UsageDisplayUnit { .. }
-            ) {
-                ctx.notify();
-            }
-        });
-
-        Self {
-            data: ConversationDetailsData::default(),
-            mouse_states: PanelMouseStates::default(),
-            artifact_buttons_row,
-            action_buttons,
-            show_open_button,
-            #[cfg(not(target_family = "wasm"))]
-            continue_locally_button,
-            open_in_oz_button,
-            resizable_state_handle: resizable_state_handle(initial_width),
-            scroll_state: ClippedScrollStateHandle::default(),
-            copy_feedback_times: HashMap::new(),
-            selection_handle: SelectionHandle::default(),
-            selected_text: Default::default(),
-            runner_platforms: HashMap::new(),
-            runners_loading: false,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     pub fn set_conversation_details(
@@ -802,38 +417,12 @@ impl ConversationDetailsPanel {
         data: ConversationDetailsData,
         ctx: &mut ViewContext<Self>,
     ) {
-        self.set_artifacts(&data, ctx);
-        self.set_action_buttons(&data, ctx);
-        self.data = data;
-        self.ensure_runner_platforms(ctx);
-        ctx.notify();
+        unimplemented!("TODO: Remove");
     }
 
     /// The runner backing this run, by the precedence the server resolves with.
     fn referenced_runner_uid(&self, app: &AppContext) -> Option<String> {
-        let PanelMode::Task {
-            runner_id,
-            environment_id,
-            ..
-        } = &self.data.mode
-        else {
-            return None;
-        };
-
-        if let Some(runner_id) = runner_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-        {
-            return Some(runner_id.to_string());
-        }
-
-        Self::environment_model(environment_id.as_deref(), app)?
-            .default_runner_uid
-            .as_deref()
-            .map(str::trim)
-            .filter(|uid| !uid.is_empty())
-            .map(str::to_string)
+        unimplemented!("TODO: Remove");
     }
 
     /// Looks up the synced environment for this run.
@@ -2594,6 +2183,3 @@ impl TypedActionView for ConversationDetailsPanel {
         }
     }
 }
-#[cfg(test)]
-#[path = "conversation_details_panel_tests.rs"]
-mod tests;

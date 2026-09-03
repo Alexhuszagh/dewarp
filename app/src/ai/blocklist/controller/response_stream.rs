@@ -311,9 +311,7 @@ impl ResponseStream {
         event: warp_multi_agent_api::ResponseEvent,
         ctx: &mut ModelContext<Self>,
     ) {
-        ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(Ok(
-            event,
-        ))));
+        unimplemented!("TODO: Remove");
     }
 
     /// Emits the natural-completion `AfterStreamFinished` event (no cancellation) through
@@ -322,30 +320,12 @@ impl ResponseStream {
     /// post-stream-cleanup pending-events re-check without a real stream.
     #[cfg(test)]
     pub fn emit_after_stream_finished_for_test(&mut self, ctx: &mut ModelContext<Self>) {
-        ctx.emit(ResponseStreamEvent::AfterStreamFinished { cancellation: None });
+        unimplemented!("TODO: Remove");
     }
 
     #[cfg(test)]
     pub fn new_for_test(id: ResponseStreamId) -> Self {
-        let (cancellation_tx, _rx) = oneshot::channel();
-        Self {
-            id,
-            params: api::RequestParams::new_for_test(),
-            recovery: RecoveryBudget::fresh().without_resume(),
-            retries_sent: 0,
-            start_time: Local::now(),
-            time_to_latest_event: TimeDelta::seconds(0),
-            cancellation_tx: Some(cancellation_tx),
-            original_error: None,
-            has_received_client_actions: false,
-            ai_identifiers: AIIdentifiers::default(),
-            pending_resume: None,
-            stream_finished_received: false,
-            error_event_emitted: false,
-            deferred_retry_pending: false,
-            current_request_id: Some(Uuid::new_v4()),
-            team_scope: RequestTeamScope::from_scope(&TeamlessScopeForTest),
-        }
+        unimplemented!("TODO: Remove");
     }
 
     pub fn new(
@@ -355,29 +335,7 @@ impl ResponseStream {
         team_scope: RequestTeamScope,
         ctx: &mut ModelContext<Self>,
     ) -> Self {
-        let (cancellation_tx, cancellation_rx) = oneshot::channel();
-        let start_time = Local::now();
-
-        let request_id = Uuid::new_v4();
-        Self::spawn_request(request_id, params.clone(), team_scope, cancellation_rx, ctx);
-        Self {
-            id: ResponseStreamId(Uuid::new_v4().to_string()),
-            params,
-            start_time,
-            time_to_latest_event: TimeDelta::seconds(0),
-            cancellation_tx: Some(cancellation_tx),
-            recovery,
-            retries_sent: 0,
-            original_error: None,
-            has_received_client_actions: false,
-            ai_identifiers,
-            pending_resume: None,
-            stream_finished_received: false,
-            error_event_emitted: false,
-            deferred_retry_pending: false,
-            current_request_id: Some(request_id),
-            team_scope,
-        }
+        unimplemented!("TODO: Remove");
     }
 
     pub fn id(&self) -> &ResponseStreamId {
@@ -400,12 +358,7 @@ impl ResponseStream {
     /// resume of it. Logged so `attempt=1/3` on a resume can't be misread as the first
     /// failure of the original request.
     fn failed_request_label(&self) -> &'static str {
-        let is_auto_resume = self
-            .params
-            .metadata
-            .as_ref()
-            .is_some_and(|metadata| metadata.is_auto_resume_after_error);
-        if is_auto_resume { "resume" } else { "original" }
+        unimplemented!("TODO: Remove");
     }
 
     /// Helper function to emit AgentModeError telemetry for error that is retryable (not user visible).
@@ -414,46 +367,11 @@ impl ResponseStream {
         error: String,
         ctx: &mut ModelContext<Self>,
     ) {
-        send_telemetry_from_ctx!(
-            crate::TelemetryEvent::AgentModeError {
-                identifiers: self.ai_identifiers.clone(),
-                error,
-                is_user_visible: false,
-                will_attempt_to_resume: false,
-            },
-            ctx
-        );
+        unimplemented!("TODO: Remove");
     }
 
     fn retry(&mut self, ctx: &mut ModelContext<Self>) {
-        self.recovery = self.recovery.next_attempt();
-        self.retries_sent += 1;
-        // Reset per-attempt state for the new attempt.
-        self.has_received_client_actions = false;
-        self.stream_finished_received = false;
-        self.error_event_emitted = false;
-        self.deferred_retry_pending = false;
-        // A retry supersedes any resume this stream had scheduled. Unreachable today (the
-        // eventsource closes on its first error, so a `Resume` decision is never followed by
-        // another error on the same stream), but that depends on a transport detail several
-        // crates away, and the retry backoff widens the window it holds in.
-        self.pending_resume = None;
-
-        let (cancellation_tx, cancellation_rx) = oneshot::channel();
-        if let Some(old_cancellation_tx) = self.cancellation_tx.take() {
-            let _ = old_cancellation_tx.send(());
-        }
-        self.cancellation_tx = Some(cancellation_tx);
-
-        let request_id = Uuid::new_v4();
-        self.current_request_id = Some(request_id);
-        Self::spawn_request(
-            request_id,
-            self.params.clone(),
-            self.team_scope,
-            cancellation_rx,
-            ctx,
-        );
+        unimplemented!("TODO: Remove");
     }
 
     /// Decides how to recover from `error` and starts the recovery, or reports the failure
@@ -463,57 +381,7 @@ impl ResponseStream {
         error: &Arc<AIApiError>,
         ctx: &mut ModelContext<Self>,
     ) -> RecoveryOutcome {
-        let is_online = NetworkStatus::as_ref(ctx).is_online();
-        let action = recovery_action(
-            self.has_received_client_actions,
-            error.is_recoverable(),
-            self.recovery,
-            is_online,
-        );
-        match action {
-            RecoveryAction::Retry => {
-                let delay = backoff_after_attempts(self.recovery.attempts_used() + 1);
-                self.log_recovery(action, &format!("{delay:?}"), error);
-                // Only emit error telemetry here if we're recovering in-request. Final
-                // errors that aren't being retried are emitted elsewhere.
-                self.emit_retryable_agent_mode_error_telemetry(format!("{error:?}"), ctx);
-                self.defer_retry_after_backoff(delay, ctx);
-                RecoveryOutcome::InFlight
-            }
-            RecoveryAction::RetryWhenOnline => {
-                self.log_recovery(action, "connectivity", error);
-                self.emit_retryable_agent_mode_error_telemetry(format!("{error:?}"), ctx);
-                self.defer_retry_until_online(ctx);
-                RecoveryOutcome::InFlight
-            }
-            RecoveryAction::Resume => {
-                // The controller sends the resume once this stream finishes, after the same
-                // backoff a retry would take. The failure is still surfaced, but as a
-                // non-terminal `TransientError`, so the UI suppresses the banner.
-                let delay = backoff_after_attempts(self.recovery.attempts_used() + 1);
-                self.pending_resume = Some(PendingResume {
-                    recovery: self.recovery.next_attempt(),
-                    backoff: delay,
-                });
-                self.log_recovery(action, &format!("after_stream_finished+{delay:?}"), error);
-                self.error_event_emitted = true;
-                self.report_request_failure(error, is_online, self.recovery.attempts_used() + 1);
-                RecoveryOutcome::Surfaced
-            }
-            RecoveryAction::Fail(reason) => {
-                log::warn!(
-                    "MultiAgent request failed; not recovering: recovery={} reason={} \
-                     attempt={}/{MAX_RECOVERY_ATTEMPTS} failed_request={} - Error: {error:?}",
-                    action.log_label(),
-                    reason.log_label(),
-                    self.recovery.attempts_used(),
-                    self.failed_request_label(),
-                );
-                self.error_event_emitted = true;
-                self.report_request_failure(error, is_online, self.recovery.attempts_used());
-                RecoveryOutcome::Surfaced
-            }
-        }
+        unimplemented!("TODO: Remove");
     }
 
     /// Logs a recovery decision.
@@ -522,21 +390,9 @@ impl ResponseStream {
     /// read against the one shared budget, so a single line says which kind of recovery ran
     /// and where in the budget it sits.
     fn log_recovery(&self, action: RecoveryAction, wait: &str, error: &Arc<AIApiError>) {
-        log::warn!(
-            "MultiAgent request failed; recovering: recovery={} \
-             attempt={}/{MAX_RECOVERY_ATTEMPTS} wait={wait} failed_request={} - Error: {error:?}",
-            action.log_label(),
-            self.recovery.attempts_used() + 1,
-            self.failed_request_label(),
-        );
+        unimplemented!("TODO: Remove");
     }
 
-    /// Sends the request for `request_id`. When the request's model is served by
-    /// the connected Grok subscription or may route to Gemini Enterprise, and
-    /// that credential is already past hard expiry, this first blocks on a
-    /// single shared refresh (owned by `ApiKeyManager`, so only one runs at a
-    /// time) before sending. Requests with valid credentials, and requests for
-    /// other providers, are sent directly.
     fn spawn_request(
         request_id: Uuid,
         params: api::RequestParams,
@@ -544,151 +400,7 @@ impl ResponseStream {
         cancellation_rx: oneshot::Receiver<()>,
         ctx: &mut ModelContext<Self>,
     ) {
-        // The Grok subscription and its OAuth refresh are native-only.
-        #[cfg(not(target_family = "wasm"))]
-        {
-            use ::ai::api_keys::{ApiKeyManager, GeapRefreshOutcome, GrokRefreshOutcome};
-            use warpui::r#async::FutureExt as _;
-
-            use crate::ai::llms::{LLMModelHost, LLMPreferences, LLMProvider};
-            use crate::workspaces::user_workspaces::UserWorkspaces;
-
-            // Only touch the Grok token for requests that actually use the Grok
-            // subscription. The subscription is the only client-side source of
-            // xAI auth (there's no BYO xAI key), so a base model whose provider
-            // is xAI is exactly a subscription request.
-            let uses_grok_subscription = LLMPreferences::as_ref(ctx)
-                .get_llm_info(&params.model, ctx)
-                .is_some_and(|info| info.provider == LLMProvider::Xai);
-            if uses_grok_subscription {
-                // Both halves, because this branch writes a member credential into `api_keys`,
-                // which stays `Some(..)` for org-level credentials even when the team disallows
-                // member BYO. Gating here also skips refreshing a token that won't be sent.
-                let byo_allowed = params.member_byo_credentials_allowed
-                    && UserWorkspaces::as_ref(ctx).is_byo_api_key_enabled(ctx);
-                // Reserve + start the shared refresh on `ApiKeyManager`'s context;
-                // the in-flight guard is released there even if this stream is
-                // dropped mid-refresh. `None` means the token is already usable.
-                let refresh_rx = ApiKeyManager::handle(ctx).update(ctx, |manager, ctx| {
-                    manager.begin_expired_grok_refresh(byo_allowed, ctx)
-                });
-                if let Some(refresh_rx) = refresh_rx {
-                    let _ = ctx.spawn(
-                        async move {
-                            // Block on the shared refresh, bounded so a hung
-                            // refresh can't stall the request forever.
-                            refresh_rx.with_timeout(GROK_REFRESH_REQUEST_TIMEOUT).await
-                        },
-                        move |me, result, ctx| {
-                            // Cancelled or superseded while refreshing — drop this attempt.
-                            if me.current_request_id != Some(request_id) {
-                                return;
-                            }
-                            if matches!(result, Ok(Ok(GrokRefreshOutcome::Refreshed))) {
-                                // Send with the freshly refreshed token.
-                                if let Some(access_token) = ApiKeyManager::as_ref(ctx)
-                                    .grok_tokens()
-                                    .and_then(|tokens| tokens.access_token_for_request())
-                                    .map(str::to_owned)
-                                    && let Some(keys) = me.params.api_keys.as_mut()
-                                {
-                                    keys.grok_oauth_access_token = access_token;
-                                }
-                                Self::spawn_generate(
-                                    request_id,
-                                    me.params.clone(),
-                                    team_scope,
-                                    cancellation_rx,
-                                    ctx,
-                                );
-                            } else {
-                                // The refresh failed or timed out: don't send with
-                                // the dead token — surface a terminal error asking
-                                // the user to reconnect their subscription.
-                                me.surface_grok_refresh_failure(request_id, ctx);
-                            }
-                        },
-                    );
-                    return;
-                }
-            }
-
-            let uses_geap = LLMPreferences::as_ref(ctx)
-                .get_llm_info(&params.model, ctx)
-                .is_some_and(|info| {
-                    info.host_configs
-                        .get(&LLMModelHost::GeminiEnterprise)
-                        .is_some_and(|host| host.enabled)
-                });
-            if uses_geap
-                && let Some(binding) =
-                    crate::ai::geap_credentials::current_geap_policy_for_any_team(ctx)
-                        .mint_binding()
-            {
-                let refresh_binding = binding.clone();
-                let refresh_rx = ApiKeyManager::handle(ctx).update(ctx, |manager, ctx| {
-                    manager.begin_expired_geap_refresh(&binding, ctx, |manager, waiter, ctx| {
-                        crate::ai::geap_credentials::start_geap_refresh_for_waiter(
-                            manager, waiter, ctx,
-                        );
-                    })
-                });
-                if let Some(refresh_rx) = refresh_rx {
-                    let _ = ctx.spawn(
-                        async move { refresh_rx.with_timeout(GEAP_REFRESH_REQUEST_TIMEOUT).await },
-                        move |me, result, ctx| {
-                            // Cancelled or superseded while waiting — drop this attempt.
-                            if me.current_request_id != Some(request_id) {
-                                return;
-                            }
-                            // `RequestParams` snapshotted the credentials before
-                            // the wait, so re-read just the GEAP credential and
-                            // leave every other key alone.
-                            //
-                            // Unlike the Grok branch above, a mint failure, a
-                            // timeout, or a dropped sender is never surfaced as a
-                            // terminal error — the request goes out with the
-                            // snapshot untouched, and it is the job of the server
-                            // to respond with an error if the GEAP credentials are bad.
-                            if matches!(result, Ok(Ok(GeapRefreshOutcome::Refreshed)))
-                                && let Some(credentials) = ApiKeyManager::as_ref(ctx)
-                                    .geap_credentials_for_request(&refresh_binding)
-                            {
-                                apply_geap_refresh_to_params(&mut me.params, Some(credentials));
-                            }
-                            Self::spawn_generate(
-                                request_id,
-                                me.params.clone(),
-                                team_scope,
-                                cancellation_rx,
-                                ctx,
-                            );
-                        },
-                    );
-                    return;
-                }
-            }
-        }
-
-        Self::spawn_generate(request_id, params, team_scope, cancellation_rx, ctx);
-    }
-
-    /// Emits a terminal, user-visible error for a failed request-time Grok token
-    /// refresh instead of sending the request with an expired token. Mirrors the
-    /// terminal-error emission in [`Self::handle_response_stream_result`].
-    #[cfg(not(target_family = "wasm"))]
-    fn surface_grok_refresh_failure(&mut self, request_id: Uuid, ctx: &mut ModelContext<Self>) {
-        let error = Arc::new(AIApiError::GrokSubscriptionTokenRefreshFailed);
-        self.error_event_emitted = true;
-        self.report_request_failure(
-            &error,
-            NetworkStatus::as_ref(ctx).is_online(),
-            self.recovery.attempts_used(),
-        );
-        ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(Err(
-            error,
-        ))));
-        self.on_response_stream_complete(request_id, ctx);
+        unimplemented!("TODO: Remove");
     }
 
     /// Spawns the actual multi-agent request send for `request_id`.
@@ -699,15 +411,7 @@ impl ResponseStream {
         cancellation_rx: oneshot::Receiver<()>,
         ctx: &mut ModelContext<Self>,
     ) {
-        let server_api = ServerApiProvider::as_ref(ctx).get();
-        let _ = ctx.spawn(
-            async move {
-                generate_multi_agent_output(server_api, params, team_scope, cancellation_rx).await
-            },
-            move |me, stream, ctx| {
-                me.handle_response_stream_result(request_id, stream, ctx);
-            },
-        );
+        unimplemented!("TODO: Remove");
     }
 
     /// Cancels the stream. The conversation_id is preserved in the emitted event for async handling.
@@ -717,242 +421,26 @@ impl ResponseStream {
         conversation_id: AIConversationId,
         ctx: &mut ModelContext<Self>,
     ) {
-        self.current_request_id = None;
-        let Some(cancellation_tx) = self.cancellation_tx.take() else {
-            return;
-        };
-        let _ = cancellation_tx.send(());
-        ctx.emit(ResponseStreamEvent::AfterStreamFinished {
-            cancellation: Some(StreamCancellation {
-                reason,
-                conversation_id,
-            }),
-        });
-    }
-
-    fn handle_response_stream_result(
-        &mut self,
-        request_id: Uuid,
-        stream_result: Result<api::ResponseStream, ConvertToAPITypeError>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        match stream_result {
-            Ok(stream) => {
-                ctx.spawn_stream_local(
-                    stream,
-                    move |me, event, ctx| {
-                        me.handle_response_stream_event(request_id, event, ctx);
-                    },
-                    move |me, ctx| {
-                        me.on_response_stream_complete(request_id, ctx);
-                    },
-                );
-            }
-            Err(e) => {
-                if self.current_request_id.is_none_or(|id| id != request_id) {
-                    return;
-                }
-                // A request-conversion failure is a deterministic client-side error and
-                // no stream was ever created: retrying would fail identically, and
-                // letting completion synthesize `UnexpectedEof` would misreport it as
-                // a transient network failure. Surface the original error and finish
-                // terminally. (HTTP send failures don't take this path — they arrive as
-                // in-stream error events.)
-                let error = Arc::new(AIApiError::Other(
-                    anyhow::Error::new(e).context("Failed to send request to multi-agent API"),
-                ));
-                self.error_event_emitted = true;
-                self.report_request_failure(
-                    &error,
-                    NetworkStatus::as_ref(ctx).is_online(),
-                    self.recovery.attempts_used(),
-                );
-                ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(Err(
-                    error,
-                ))));
-                self.on_response_stream_complete(request_id, ctx);
-            }
-        }
-    }
-
-    fn handle_response_stream_event(
-        &mut self,
-        request_id: Uuid,
-        event: api::Event,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.current_request_id.is_none_or(|id| id != request_id) {
-            return;
-        }
-        self.time_to_latest_event = Local::now().signed_duration_since(self.start_time);
-
-        match &event {
-            Ok(response_event) => {
-                if let Some(event_type) = &response_event.r#type {
-                    match event_type {
-                        warp_multi_agent_api::response_event::Type::Init(init_event) => {
-                            // Capture server_output_id from StreamInit event
-                            self.ai_identifiers.server_output_id =
-                                Some(crate::ai::agent::ServerOutputId::new(
-                                    init_event.request_id.clone(),
-                                ));
-                        }
-                        warp_multi_agent_api::response_event::Type::ClientActions(_) => {
-                            // Mark that we've received client actions
-                            self.has_received_client_actions = true;
-                        }
-                        warp_multi_agent_api::response_event::Type::Finished(finished_event) => {
-                            self.stream_finished_received = true;
-                            // Emit retry success telemetry on successful completion
-                            if matches!(
-                                finished_event.reason,
-                                Some(warp_multi_agent_api::response_event::stream_finished::Reason::Done(_)) | None
-                            ) {
-                                // Emit retry success telemetry if this was a successful completion after retries
-                                if self.retries_sent > 0
-                                    && let Some(original_error) = &self.original_error {
-                                        send_telemetry_from_ctx!(
-                                            crate::TelemetryEvent::AgentModeRequestRetrySucceeded {
-                                                identifiers: self.ai_identifiers.clone(),
-                                                retry_count: self.retries_sent,
-                                                original_error: original_error.clone(),
-                                            },
-                                            ctx
-                                        );
-                                    }
-                            }
-                        }
-                    }
-                }
-                ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(event)));
-            }
-            Err(e) => {
-                // Store original error if this is the first error
-                if self.original_error.is_none() {
-                    self.original_error = Some(format!("{e:?}"));
-                }
-
-                if matches!(self.begin_recovery(e, ctx), RecoveryOutcome::InFlight) {
-                    // Don't emit the error event, we're recovering in-request.
-                    return;
-                }
-
-                ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(event)));
-            }
-        }
+        unimplemented!("TODO: Remove");
     }
 
     fn on_response_stream_complete(&mut self, request_id: Uuid, ctx: &mut ModelContext<Self>) {
-        if self.current_request_id.is_none_or(|id| id != request_id) {
-            return;
-        }
-        // A retry is parked waiting for a backoff or for connectivity; the request is
-        // logically still active, so don't complete the stream for the failed attempt.
-        if self.deferred_retry_pending {
-            return;
-        }
-
-        // The server always sends a StreamFinished event before ending the response,
-        // but a transport cut between chunks surfaces as a clean EOF. Synthesize the
-        // failure and recover like any transient error.
-        if !self.stream_finished_received && !self.error_event_emitted {
-            log::warn!(
-                "generate_multi_agent_output stream ended without emitting StreamFinished event."
-            );
-            let unexpected_eof = Arc::new(AIApiError::UnexpectedEof);
-            if matches!(
-                self.begin_recovery(&unexpected_eof, ctx),
-                RecoveryOutcome::InFlight
-            ) {
-                return;
-            }
-            ctx.emit(ResponseStreamEvent::ReceivedEvent(Consumable::new(Err(
-                unexpected_eof,
-            ))));
-        }
-
-        ctx.emit(ResponseStreamEvent::AfterStreamFinished { cancellation: None });
-        self.cancellation_tx = None;
+        unimplemented!("TODO: Remove");
     }
 
-    /// Reports a non-retried request failure to crash reporting with classification
-    /// tags.
-    ///
-    /// `recovery_attempt` is the attempt this failure sits at, counted the same way the
-    /// recovery log line counts it: the attempt a scheduled resume is about to make, or the
-    /// attempts already spent when the failure is terminal. Passing it in rather than
-    /// deriving it here keeps the two surfaces from disagreeing by one for one failure.
     fn report_request_failure(
         &self,
         error: &Arc<AIApiError>,
         is_online: bool,
         recovery_attempt: usize,
     ) {
-        #[cfg(feature = "crash_reporting")]
-        sentry::with_scope(
-            |scope| {
-                scope.set_tag(
-                    "has_received_client_actions",
-                    self.has_received_client_actions,
-                );
-                scope.set_tag("error", format!("{error:?}"));
-                scope.set_tag("is_recoverable", error.is_recoverable());
-                scope.set_tag(
-                    "will_attempt_resume",
-                    self.should_resume_conversation_after_stream_finished(),
-                );
-                scope.set_tag("is_online", is_online);
-                scope.set_tag("failed_request", self.failed_request_label());
-            },
-            || {
-                report_error!(
-                    error.as_ref(),
-                    extra: {
-                        "has_received_client_actions" => self.has_received_client_actions,
-                        "is_recoverable" => error.is_recoverable(),
-                        "will_attempt_resume" => self.should_resume_conversation_after_stream_finished(),
-                        "is_online" => is_online,
-                        "failed_request" => self.failed_request_label(),
-                        "recovery_attempt" => recovery_attempt,
-                        "max_recovery_attempts" => MAX_RECOVERY_ATTEMPTS,
-                        "error_debug" => %format!("{error:?}"),
-                    }
-                );
-            },
-        );
-        #[cfg(not(feature = "crash_reporting"))]
-        {
-            report_error!(
-                error.as_ref(),
-                extra: {
-                    "has_received_client_actions" => self.has_received_client_actions,
-                    "is_recoverable" => error.is_recoverable(),
-                    "will_attempt_resume" => self.should_resume_conversation_after_stream_finished(),
-                    "is_online" => is_online,
-                    "failed_request" => self.failed_request_label(),
-                    "recovery_attempt" => recovery_attempt,
-                    "max_recovery_attempts" => MAX_RECOVERY_ATTEMPTS,
-                    "error_debug" => %format!("{error:?}"),
-                }
-            );
-        }
+        unimplemented!("TODO: Remove");
     }
 
     /// Parks a retry until connectivity returns; cancellation invalidates the parked
     /// retry through `current_request_id`.
     fn defer_retry_until_online(&mut self, ctx: &mut ModelContext<Self>) {
-        self.deferred_retry_pending = true;
-        ctx.emit(ResponseStreamEvent::WaitingForNetwork { waiting: true });
-        let request_id_at_defer = self.current_request_id;
-        let wait_for_online = NetworkStatus::as_ref(ctx).wait_until_online();
-        let _ = ctx.spawn(wait_for_online, move |me, _, ctx| {
-            // Cancelled or superseded while waiting — drop the parked retry.
-            if request_id_at_defer.is_none() || me.current_request_id != request_id_at_defer {
-                return;
-            }
-            ctx.emit(ResponseStreamEvent::WaitingForNetwork { waiting: false });
-            me.retry(ctx);
-        });
+        unimplemented!("TODO: Remove");
     }
 
     /// Parks a retry behind the shared recovery backoff, so a re-send doesn't land in the
@@ -961,18 +449,7 @@ impl ResponseStream {
     /// No `WaitingForNetwork` event is emitted: the failure hasn't been surfaced, the
     /// conversation is still in progress, and the wait is bounded to a couple of seconds.
     fn defer_retry_after_backoff(&mut self, delay: Duration, ctx: &mut ModelContext<Self>) {
-        self.deferred_retry_pending = true;
-        let request_id_at_defer = self.current_request_id;
-        let _ = ctx.spawn(
-            async move { Timer::after(delay).await },
-            move |me, _, ctx| {
-                // Cancelled or superseded while backing off — drop the parked retry.
-                if request_id_at_defer.is_none() || me.current_request_id != request_id_at_defer {
-                    return;
-                }
-                me.retry(ctx);
-            },
-        );
+        unimplemented!("TODO: Remove");
     }
 }
 
@@ -984,11 +461,7 @@ fn apply_geap_refresh_to_params(
     params: &mut api::RequestParams,
     fresh_credentials: Option<maa_api::request::settings::api_keys::GoogleCloudCredentials>,
 ) {
-    if let Some(credentials) = fresh_credentials
-        && let Some(keys) = params.api_keys.as_mut()
-    {
-        keys.google_cloud_credentials = Some(credentials);
-    }
+    unimplemented!("TODO: Remove");
 }
 
 #[derive(Debug)]

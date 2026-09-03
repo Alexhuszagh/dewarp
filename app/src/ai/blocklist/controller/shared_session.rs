@@ -422,66 +422,7 @@ impl BlocklistAIController {
         finished: warp_multi_agent_api::response_event::StreamFinished,
         ctx: &mut ModelContext<Self>,
     ) {
-        if self
-            .shared_session_state
-            .should_skip_current_replayed_response
-        {
-            self.shared_session_state.current_response_id.take();
-            self.shared_session_state
-                .should_skip_current_replayed_response = false;
-            return;
-        }
-        let Some(stream_id) = self.shared_session_state.current_response_id.take() else {
-            log::warn!("Shared Finished missing request_id");
-            return;
-        };
-        let Some(conversation_id) =
-            BlocklistAIHistoryModel::as_ref(ctx).conversation_for_response_stream(&stream_id)
-        else {
-            log::warn!(
-                "No conversation ID for shared session response stream with id={stream_id:?}"
-            );
-            return;
-        };
-
-        let history_model = BlocklistAIHistoryModel::handle(ctx);
-        let Some(conversation) = history_model.as_ref(ctx).conversation(&conversation_id) else {
-            report_error!(
-                "Failed to find conversation with id",
-                extra: { "conversation_id" => ?conversation_id }
-            );
-            return;
-        };
-
-        // Queue actions for viewer UI in view-only mode
-        let mut actions_to_queue = vec![];
-        let mut did_exchange_contain_user_query = false;
-
-        for new_exchange_id in conversation.new_exchange_ids_for_response(&stream_id) {
-            let Some(exchange) = conversation.exchange_with_id(new_exchange_id) else {
-                continue;
-            };
-            did_exchange_contain_user_query |=
-                exchange.input.iter().any(|input| input.is_user_query());
-
-            if let Some(output) = exchange.output_status.output() {
-                actions_to_queue.extend(output.get().actions().cloned().collect_vec().into_iter());
-            }
-        }
-
-        if !actions_to_queue.is_empty() {
-            self.action_model.update(ctx, |action_model, ctx| {
-                action_model.queue_actions(actions_to_queue, conversation_id, ctx);
-            });
-        }
-
-        self.handle_response_stream_finished(
-            &stream_id,
-            finished,
-            conversation_id,
-            did_exchange_contain_user_query,
-            ctx,
-        );
+        unimplemented!("TODO: Remove");
     }
 
     /// Finds an existing client conversation whose server_conversation_token matches `server_token`.
