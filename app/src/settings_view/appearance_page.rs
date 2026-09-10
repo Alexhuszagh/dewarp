@@ -1478,7 +1478,6 @@ impl AppearanceSettingsPageView {
         if cfg!(feature = "local_fs") && FeatureFlag::GlobalSearch.is_enabled() {
             tools_panel_widgets.push(Box::new(ToolsPanelGlobalSearchWidget::default()));
         }
-        tools_panel_widgets.push(Box::new(ToolsPanelWarpDriveWidget::default()));
         if !tools_panel_widgets.is_empty() {
             categories.push(Category::new("Tools panel", tools_panel_widgets));
         }
@@ -1514,7 +1513,6 @@ impl AppearanceSettingsPageView {
         let font_settings = FontSettings::as_ref(ctx);
         let mut text_settings_widgets: Vec<Box<dyn SettingsWidget<View = Self>>> = vec![
             Box::new(TerminalFontWidget::default()),
-            Box::new(AIFontWidget::default()),
             Box::new(NotebookFontSizeWidget::default()),
         ];
         if font_settings
@@ -4173,75 +4171,6 @@ impl SettingsWidget for ShowBlockDividersWidget {
                 .finish(),
             None,
         )
-    }
-}
-
-#[derive(Default)]
-struct AIFontWidget {
-    checkbox_state: MouseStateHandle,
-}
-
-impl SettingsWidget for AIFontWidget {
-    type View = AppearanceSettingsPageView;
-
-    fn search_terms(&self) -> &str {
-        "text agent ai font family font size monospace"
-    }
-
-    fn render(
-        &self,
-        view: &Self::View,
-        appearance: &Appearance,
-        app: &AppContext,
-    ) -> Box<dyn Element> {
-        let font_settings = FontSettings::as_ref(app);
-        let mut ai_font_row = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Center);
-        let mut ai_font = Flex::column();
-        ai_font.add_child(render_body_item_label::<AppearancePageAction>(
-            "Agent font".to_string(),
-            None,
-            None,
-            LocalOnlyIconState::for_setting(
-                AIFontName::storage_key(),
-                AIFontName::sync_to_cloud(),
-                &mut view.local_only_icon_tooltip_states.borrow_mut(),
-                app,
-            ),
-            ToggleState::Enabled,
-            appearance,
-        ));
-        ai_font.add_child(
-            Container::new(ChildView::new(&view.ai_font_family_dropdown).finish())
-                .with_margin_bottom(10.)
-                .finish(),
-        );
-
-        ai_font_row
-            .add_child(Shrinkable::new(1., Align::new(ai_font.finish()).left().finish()).finish());
-        ai_font_row.add_child(
-            appearance
-                .ui_builder()
-                .checkbox(self.checkbox_state.clone(), None)
-                .check(*font_settings.match_ai_font_to_terminal_font)
-                .build()
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(
-                        AppearancePageAction::ToggleMatchAIToTerminalFontFamily,
-                    )
-                })
-                .finish(),
-        );
-        ai_font_row.add_child(
-            appearance
-                .ui_builder()
-                .span("Match terminal".to_string())
-                .build()
-                .with_margin_left(2.)
-                .with_margin_right(16.)
-                .finish(),
-        );
-
-        ai_font_row.finish()
     }
 }
 
