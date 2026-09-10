@@ -3652,7 +3652,7 @@ struct ToolsPanelConversationHistoryWidget {
     switch_state: SwitchStateHandle,
 }
 
-impl SettingsWidget for ToolsPanelConversationHistoryWidget {
+impl SettingsWidget for ToolsPanelConversationHistoryWidget { // TODO: REMOVE
     type View = AppearanceSettingsPageView;
 
     fn search_terms(&self) -> &str {

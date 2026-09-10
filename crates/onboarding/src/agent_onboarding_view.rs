@@ -62,6 +62,7 @@ pub enum AgentOnboardingEvent {
     /// emitted from the terminal-intention theme slide; consumers (e.g. a
     /// `LoginSlideView` with `LoginSlideSource::PrivacySettingsFromTerminalIntentionTheme`)
     /// rely on that to select the right visual / back-routing behavior.
+
     PrivacySettingsFromTerminalThemeSlideRequested,
     UpgradeRequested,
     UpgradeCopyUrlRequested,

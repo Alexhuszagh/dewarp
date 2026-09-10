@@ -80,45 +80,8 @@ impl View for IntroSlide {
             ..Default::default()
         };
 
-        let login_row = Flex::row()
-            .with_child(
-                ui_builder
-                    .span("Already have an account? ")
-                    .with_style(disclaimer_styles)
-                    .build()
-                    .finish(),
-            )
-            .with_child(
-                ui_builder
-                    .link(
-                        "Log in".into(),
-                        None,
-                        Some(Box::new(|ctx| {
-                            ctx.dispatch_typed_action(IntroSlideAction::LoginClicked);
-                        })),
-                        self.login_mouse_state.clone(),
-                    )
-                    .soft_wrap(false)
-                    .with_style(UiComponentStyles {
-                        font_size: Some(12.),
-                        ..Default::default()
-                    })
-                    .build()
-                    .finish(),
-            )
-            .finish();
-
         let mut stack = Stack::new();
         stack.add_child(centered);
-        stack.add_positioned_child(
-            login_row,
-            OffsetPositioning::offset_from_parent(
-                vec2f(0., -28.),
-                ParentOffsetBounds::ParentBySize,
-                ParentAnchor::BottomMiddle,
-                ChildAnchor::BottomMiddle,
-            ),
-        );
         stack.finish()
     }
 }

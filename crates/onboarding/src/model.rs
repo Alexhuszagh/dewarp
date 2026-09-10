@@ -22,11 +22,11 @@ impl UICustomizationSettings {
     pub fn agent_defaults() -> Self {
         Self {
             use_vertical_tabs: true,
-            show_conversation_history: true,
+            show_conversation_history: false,
             show_project_explorer: true,
             show_global_search: true,
-            show_warp_drive: true,
-            show_code_review_button: true,
+            show_warp_drive: false,
+            show_code_review_button: false,
         }
     }
 
@@ -76,32 +76,11 @@ pub enum SelectedSettings {
 
 impl SelectedSettings {
     pub fn is_ai_enabled(&self) -> bool {
-        match self {
-            // Agent-driven development always means "I want AI" (including the
-            // bring-your-own-agents `disable_oz` path). This reflects intent and
-            // is used to decide that an account/login is required; whether AI is
-            // actually enabled is applied later based on whether the user has an
-            // account (see `apply_onboarding_settings`).
-            SelectedSettings::AgentDrivenDevelopment { .. } => true,
-            SelectedSettings::Terminal { .. } => false,
-        }
+        false
     }
 
     pub fn is_warp_drive_enabled(&self) -> bool {
-        match self {
-            SelectedSettings::AgentDrivenDevelopment {
-                ui_customization, ..
-            } => ui_customization
-                .as_ref()
-                .map(|ui| ui.show_warp_drive)
-                .unwrap_or(true),
-            SelectedSettings::Terminal {
-                ui_customization, ..
-            } => ui_customization
-                .as_ref()
-                .map(|ui| ui.show_warp_drive)
-                .unwrap_or(false),
-        }
+        false
     }
 }
 
@@ -481,29 +460,8 @@ impl OnboardingStateModel {
             },
             ctx
         );
-        self.ui_customization.show_conversation_history = enabled;
         self.ui_customization.show_project_explorer = enabled;
         self.ui_customization.show_global_search = enabled;
-        self.ui_customization.show_warp_drive = enabled;
-        ctx.notify();
-    }
-
-    pub(crate) fn set_show_conversation_history(
-        &mut self,
-        value: bool,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.ui_customization.show_conversation_history == value {
-            return;
-        }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "conversation_history".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
-        self.ui_customization.show_conversation_history = value;
         ctx.notify();
     }
 
@@ -534,21 +492,6 @@ impl OnboardingStateModel {
             ctx
         );
         self.ui_customization.show_global_search = value;
-        ctx.notify();
-    }
-
-    pub(crate) fn set_show_warp_drive(&mut self, value: bool, ctx: &mut ModelContext<Self>) {
-        if self.ui_customization.show_warp_drive == value {
-            return;
-        }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "warp_drive".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
-        self.ui_customization.show_warp_drive = value;
         ctx.notify();
     }
 
@@ -587,25 +530,6 @@ impl OnboardingStateModel {
             ctx
         );
         self.agent_settings.show_agent_notifications = value;
-        ctx.notify();
-    }
-
-    pub(crate) fn set_show_code_review_button(
-        &mut self,
-        value: bool,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.ui_customization.show_code_review_button == value {
-            return;
-        }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "code_review".to_string(),
-                value: if value { "enabled" } else { "disabled" }.to_string(),
-            },
-            ctx
-        );
-        self.ui_customization.show_code_review_button = value;
         ctx.notify();
     }
 

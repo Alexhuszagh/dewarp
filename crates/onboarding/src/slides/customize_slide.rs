@@ -26,16 +26,13 @@ use crate::slides::{bottom_nav, layout, slide_content};
 enum SettingCard {
     TabStyling,
     ToolsPanel,
-    CodeReview,
 }
 
 /// Sub-settings within the tools panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolsPanelSubSetting {
-    ConversationHistory,
     ProjectExplorer,
     GlobalSearch,
-    WarpDrive,
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +42,6 @@ pub enum CustomizeSlideAction {
     SetToolsPanelEnabled { enabled: bool },
     ToggleToolsSubSetting { setting: ToolsPanelSubSetting },
     HoverToolsChip { setting: ToolsPanelSubSetting },
-    SetCodeReviewEnabled { enabled: bool },
     BackClicked,
     NextClicked,
 }
@@ -59,19 +55,14 @@ pub struct CustomizeUISlide {
     // Mouse states for setting cards
     tab_styling_mouse_state: MouseStateHandle,
     tools_panel_mouse_state: MouseStateHandle,
-    code_review_mouse_state: MouseStateHandle,
     // Mouse states for segmented control options (2 per card)
     tab_seg_left_mouse: MouseStateHandle,
     tab_seg_right_mouse: MouseStateHandle,
     tools_seg_left_mouse: MouseStateHandle,
     tools_seg_right_mouse: MouseStateHandle,
-    code_seg_left_mouse: MouseStateHandle,
-    code_seg_right_mouse: MouseStateHandle,
     // Mouse states for tools panel chip buttons
-    chip_conversation_mouse: MouseStateHandle,
     chip_file_explorer_mouse: MouseStateHandle,
     chip_global_search_mouse: MouseStateHandle,
-    chip_warp_drive_mouse: MouseStateHandle,
     // Buttons
     back_button: button::Button,
     next_button: button::Button,
@@ -97,17 +88,12 @@ impl CustomizeUISlide {
             hovered_chip: None,
             tab_styling_mouse_state: MouseStateHandle::default(),
             tools_panel_mouse_state: MouseStateHandle::default(),
-            code_review_mouse_state: MouseStateHandle::default(),
             tab_seg_left_mouse: MouseStateHandle::default(),
             tab_seg_right_mouse: MouseStateHandle::default(),
             tools_seg_left_mouse: MouseStateHandle::default(),
             tools_seg_right_mouse: MouseStateHandle::default(),
-            code_seg_left_mouse: MouseStateHandle::default(),
-            code_seg_right_mouse: MouseStateHandle::default(),
-            chip_conversation_mouse: MouseStateHandle::default(),
             chip_file_explorer_mouse: MouseStateHandle::default(),
             chip_global_search_mouse: MouseStateHandle::default(),
-            chip_warp_drive_mouse: MouseStateHandle::default(),
             back_button: button::Button::default(),
             next_button: button::Button::default(),
             scroll_state: ClippedScrollStateHandle::new(),
@@ -191,7 +177,6 @@ impl CustomizeUISlide {
     ) -> Box<dyn Element> {
         let tab_card = self.render_tab_styling_card(appearance, ui);
         let tools_card = self.render_tools_panel_card(appearance, intention, ui);
-        let code_card = self.render_code_review_card(appearance, ui);
 
         Container::new(
             Flex::column()
@@ -200,7 +185,6 @@ impl CustomizeUISlide {
                 .with_spacing(12.)
                 .with_child(tab_card)
                 .with_child(tools_card)
-                .with_child(code_card)
                 .finish(),
         )
         .with_margin_top(12.)
@@ -251,7 +235,7 @@ impl CustomizeUISlide {
         ui: &UICustomizationSettings,
     ) -> Box<dyn Element> {
         let is_selected = self.selected_setting == Some(SettingCard::ToolsPanel);
-        let is_agent = matches!(intention, OnboardingIntention::AgentDrivenDevelopment);
+        let is_agent = false;
 
         let mut chips = vec![];
 
@@ -274,27 +258,6 @@ impl CustomizeUISlide {
                 })),
             });
 
-            // Conversation history chip is only shown for the agent intention.
-            if is_agent {
-                chips.push(ChipSpec {
-                    label: "Conversation history",
-                    is_enabled: ui.show_conversation_history,
-                    mouse_state: self.chip_conversation_mouse.clone(),
-                    on_click: Box::new(|ctx, _, _| {
-                        ctx.dispatch_typed_action(CustomizeSlideAction::ToggleToolsSubSetting {
-                            setting: ToolsPanelSubSetting::ConversationHistory,
-                        });
-                    }),
-                    on_hover: Some(Box::new(|is_hovered, ctx, _, _| {
-                        if is_hovered {
-                            ctx.dispatch_typed_action(CustomizeSlideAction::HoverToolsChip {
-                                setting: ToolsPanelSubSetting::ConversationHistory,
-                            });
-                        }
-                    })),
-                });
-            }
-
             chips.push(ChipSpec {
                 label: "Global file search",
                 is_enabled: ui.show_global_search,
@@ -308,24 +271,6 @@ impl CustomizeUISlide {
                     if is_hovered {
                         ctx.dispatch_typed_action(CustomizeSlideAction::HoverToolsChip {
                             setting: ToolsPanelSubSetting::GlobalSearch,
-                        });
-                    }
-                })),
-            });
-
-            chips.push(ChipSpec {
-                label: "Warp Drive",
-                is_enabled: ui.show_warp_drive,
-                mouse_state: self.chip_warp_drive_mouse.clone(),
-                on_click: Box::new(|ctx, _, _| {
-                    ctx.dispatch_typed_action(CustomizeSlideAction::ToggleToolsSubSetting {
-                        setting: ToolsPanelSubSetting::WarpDrive,
-                    });
-                }),
-                on_hover: Some(Box::new(|is_hovered, ctx, _, _| {
-                    if is_hovered {
-                        ctx.dispatch_typed_action(CustomizeSlideAction::HoverToolsChip {
-                            setting: ToolsPanelSubSetting::WarpDrive,
                         });
                     }
                 })),
@@ -359,44 +304,6 @@ impl CustomizeUISlide {
                     });
                 }),
                 chips,
-            },
-        )
-    }
-
-    fn render_code_review_card(
-        &self,
-        appearance: &Appearance,
-        ui: &UICustomizationSettings,
-    ) -> Box<dyn Element> {
-        let is_selected = self.selected_setting == Some(SettingCard::CodeReview);
-
-        render_toggle_card(
-            appearance,
-            ToggleCardSpec {
-                title: "Code review",
-                is_expanded: is_selected,
-                is_left_selected: ui.show_code_review_button,
-                left_label: "Enabled",
-                right_label: "Disabled",
-                card_mouse_state: self.code_review_mouse_state.clone(),
-                on_expand: Box::new(|ctx, _, _| {
-                    ctx.dispatch_typed_action(CustomizeSlideAction::SelectSettingCard {
-                        card_index: 2,
-                    });
-                }),
-                left_mouse: self.code_seg_left_mouse.clone(),
-                right_mouse: self.code_seg_right_mouse.clone(),
-                on_left: Box::new(|ctx, _, _| {
-                    ctx.dispatch_typed_action(CustomizeSlideAction::SetCodeReviewEnabled {
-                        enabled: true,
-                    });
-                }),
-                on_right: Box::new(|ctx, _, _| {
-                    ctx.dispatch_typed_action(CustomizeSlideAction::SetCodeReviewEnabled {
-                        enabled: false,
-                    });
-                }),
-                chips: vec![],
             },
         )
     }
@@ -538,12 +445,6 @@ impl CustomizeUISlide {
                     let chip = hovered_chip.unwrap_or(default_chip);
                     if is_agent {
                         match (chip, vertical) {
-                            (ToolsPanelSubSetting::ConversationHistory, true) => {
-                                "async/png/onboarding/agent_intention/customize_conversation_vertical.png"
-                            }
-                            (ToolsPanelSubSetting::ConversationHistory, false) => {
-                                "async/png/onboarding/agent_intention/customize_conversation_horizontal.png"
-                            }
                             (ToolsPanelSubSetting::ProjectExplorer, true) => {
                                 "async/png/onboarding/agent_intention/customize_fileexplorer_vertical.png"
                             }
@@ -556,28 +457,14 @@ impl CustomizeUISlide {
                             (ToolsPanelSubSetting::GlobalSearch, false) => {
                                 "async/png/onboarding/agent_intention/customize_filesearch_horizontal.png"
                             }
-                            (ToolsPanelSubSetting::WarpDrive, true) => {
-                                "async/png/onboarding/agent_intention/customize_warpdrive_vertical.png"
-                            }
-                            (ToolsPanelSubSetting::WarpDrive, false) => {
-                                "async/png/onboarding/agent_intention/customize_warpdrive_horizontal.png"
-                            }
                         }
                     } else {
                         // Terminal: no conversation chip; ConversationHistory falls through to file explorer.
                         match (chip, vertical) {
-                            (
-                                ToolsPanelSubSetting::ConversationHistory
-                                | ToolsPanelSubSetting::ProjectExplorer,
-                                true,
-                            ) => {
+                            (ToolsPanelSubSetting::ProjectExplorer, true) => {
                                 "async/png/onboarding/terminal_intention/terminal_customize_fileexplorer_vertical.png"
                             }
-                            (
-                                ToolsPanelSubSetting::ConversationHistory
-                                | ToolsPanelSubSetting::ProjectExplorer,
-                                false,
-                            ) => {
+                            (ToolsPanelSubSetting::ProjectExplorer, false) => {
                                 "async/png/onboarding/terminal_intention/terminal_customize_fileexplorer_horizontal.png"
                             }
                             (ToolsPanelSubSetting::GlobalSearch, true) => {
@@ -586,36 +473,8 @@ impl CustomizeUISlide {
                             (ToolsPanelSubSetting::GlobalSearch, false) => {
                                 "async/png/onboarding/terminal_intention/terminal_customize_filesearch_horizontal.png"
                             }
-                            (ToolsPanelSubSetting::WarpDrive, true) => {
-                                "async/png/onboarding/terminal_intention/terminal_customize_warpdrive_vertical.png"
-                            }
-                            (ToolsPanelSubSetting::WarpDrive, false) => {
-                                "async/png/onboarding/terminal_intention/terminal_customize_warpdrive_horizontal.png"
-                            }
                         }
                     }
-                }
-            }
-            Some(SettingCard::CodeReview) => {
-                if is_agent {
-                    match (ui.show_code_review_button, vertical) {
-                        (true, true) => {
-                            "async/png/onboarding/agent_intention/customize_codereview_enabled_vertical.png"
-                        }
-                        (true, false) => {
-                            "async/png/onboarding/agent_intention/customize_codereview_enabled_horizontal.png"
-                        }
-                        (false, true) => {
-                            "async/png/onboarding/agent_intention/customize_codereview_disabled_vertical.png"
-                        }
-                        (false, false) => {
-                            "async/png/onboarding/agent_intention/customize_codereview_disabled_horizontal.png"
-                        }
-                    }
-                } else if ui.show_code_review_button {
-                    "async/png/onboarding/terminal_intention/terminal_codereview_enabled.png"
-                } else {
-                    "async/png/onboarding/terminal_intention/terminal_codereview_disabled.png"
                 }
             }
         }
@@ -629,7 +488,6 @@ impl CustomizeUISlide {
         let path = Self::visual_image_path(self.selected_setting, self.hovered_chip, intention, ui);
         let fg_layout = match self.selected_setting {
             None => layout::FOREGROUND_LAYOUT_DEFAULT,
-            Some(SettingCard::CodeReview) => layout::FOREGROUND_LAYOUT_CODE_REVIEW,
             _ => layout::FOREGROUND_LAYOUT_WIDE,
         };
         layout::onboarding_right_panel_with_bg(path, fg_layout)
@@ -662,7 +520,6 @@ impl CustomizeUISlide {
         let card = match card_index {
             0 => SettingCard::TabStyling,
             1 => SettingCard::ToolsPanel,
-            2 => SettingCard::CodeReview,
             _ => return,
         };
         // Only select — don't toggle. Clicking a different card replaces the selection.
@@ -684,7 +541,6 @@ impl OnboardingSlide for CustomizeUISlide {
         // Move setting selection up
         self.selected_setting = match self.selected_setting {
             Some(SettingCard::ToolsPanel) => Some(SettingCard::TabStyling),
-            Some(SettingCard::CodeReview) => Some(SettingCard::ToolsPanel),
             _ => self.selected_setting,
         };
         ctx.notify();
@@ -693,7 +549,6 @@ impl OnboardingSlide for CustomizeUISlide {
     fn on_down(&mut self, ctx: &mut ViewContext<Self>) {
         self.selected_setting = match self.selected_setting {
             Some(SettingCard::TabStyling) => Some(SettingCard::ToolsPanel),
-            Some(SettingCard::ToolsPanel) => Some(SettingCard::CodeReview),
             None => Some(SettingCard::TabStyling),
             other => other,
         };
@@ -714,12 +569,6 @@ impl OnboardingSlide for CustomizeUISlide {
                 });
                 ctx.notify();
             }
-            Some(SettingCard::CodeReview) => {
-                self.onboarding_state.update(ctx, |model, ctx| {
-                    model.set_show_code_review_button(true, ctx);
-                });
-                ctx.notify();
-            }
             None => {}
         }
     }
@@ -736,12 +585,6 @@ impl OnboardingSlide for CustomizeUISlide {
                 self.hovered_chip = None;
                 self.onboarding_state.update(ctx, |model, ctx| {
                     model.set_tools_panel_enabled(false, ctx);
-                });
-                ctx.notify();
-            }
-            Some(SettingCard::CodeReview) => {
-                self.onboarding_state.update(ctx, |model, ctx| {
-                    model.set_show_code_review_button(false, ctx);
                 });
                 ctx.notify();
             }
@@ -787,10 +630,6 @@ impl TypedActionView for CustomizeUISlide {
                 let setting = *setting;
                 self.onboarding_state
                     .update(ctx, |model, ctx| match setting {
-                        ToolsPanelSubSetting::ConversationHistory => {
-                            let current = model.ui_customization().show_conversation_history;
-                            model.set_show_conversation_history(!current, ctx);
-                        }
                         ToolsPanelSubSetting::ProjectExplorer => {
                             let current = model.ui_customization().show_project_explorer;
                             model.set_show_project_explorer(!current, ctx);
@@ -799,18 +638,7 @@ impl TypedActionView for CustomizeUISlide {
                             let current = model.ui_customization().show_global_search;
                             model.set_show_global_search(!current, ctx);
                         }
-                        ToolsPanelSubSetting::WarpDrive => {
-                            let current = model.ui_customization().show_warp_drive;
-                            model.set_show_warp_drive(!current, ctx);
-                        }
                     });
-                ctx.notify();
-            }
-            CustomizeSlideAction::SetCodeReviewEnabled { enabled } => {
-                let value = *enabled;
-                self.onboarding_state.update(ctx, |model, ctx| {
-                    model.set_show_code_review_button(value, ctx);
-                });
                 ctx.notify();
             }
             CustomizeSlideAction::BackClicked => {

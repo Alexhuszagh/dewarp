@@ -46,17 +46,12 @@ impl WarpDriveSettings {
     /// preference so Warp Drive appears automatically after signup, while the
     /// feature remains unavailable until then.
     pub fn is_warp_drive_available(app: &warpui::AppContext) -> bool {
-        use warpui::SingletonEntity as _;
-        !FeatureFlag::SkipFirebaseAnonymousUser.is_enabled()
-            || !crate::auth::AuthStateProvider::as_ref(app)
-                .get()
-                .is_anonymous_or_logged_out()
+        false
     }
     /// Returns whether Warp Drive should be considered enabled.
     /// Returns `false` when the user is anonymous or fully logged out,
     /// regardless of the user setting.
     pub fn is_warp_drive_enabled(app: &warpui::AppContext) -> bool {
-        use warpui::SingletonEntity as _;
-        *Self::as_ref(app).enable_warp_drive && Self::is_warp_drive_available(app)
+        false
     }
 }
